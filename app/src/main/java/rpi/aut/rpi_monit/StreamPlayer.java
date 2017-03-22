@@ -1,4 +1,4 @@
-package rpi.aut.homeautomation;
+package rpi.aut.rpi_monit;
 
 import android.content.Context;
 import android.util.Log;

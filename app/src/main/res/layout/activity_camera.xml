@@ -1,0 +1,76 @@
+<android.support.design.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorPrimaryDark">
+
+    <!-- The primary full-screen view. This can be replaced with whatever view
+         is needed to present your content, e.g. VideoView, SurfaceView,
+         TextureView, etc. -->
+    <TextView
+        android:id="@+id/fullscreen_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:keepScreenOn="true"
+        android:text="@string/dummy_content"
+        android:textColor="#33b5e5"
+        android:textSize="50sp"
+        android:textStyle="bold" />
+
+    <!-- This FrameLayout insets its children based on system windows using
+         android:fitsSystemWindows. -->
+
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fitsSystemWindows="true"
+        android:orientation="horizontal"
+        app:behavior_hideable="false"
+        app:behavior_peekHeight="@dimen/camera_menu_height"
+        android:id="@+id/bottom_sheet"
+        android:background="#4D000000"
+        app:layout_behavior="@string/bottom_sheet_behavior">
+
+
+
+        <android.support.v7.widget.RecyclerView
+            android:id="@+id/sensorButtons"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/camera_menu_height"
+            android:layout_marginBottom="16dp" />
+
+
+    </FrameLayout>
+
+
+    <rpi.aut.rpi_monit.components.TickBarView
+        android:id="@+id/barCameraY"
+        android:layout_marginRight="20dp"
+        android:layout_gravity="right|center_vertical"
+        app:barMarker="move_vertical"
+        app:barOrientation="right"
+        android:layout_width="24dp" android:layout_height="match_parent"/>
+
+    <rpi.aut.rpi_monit.components.TickBarView
+        android:id="@+id/barCameraX"
+        android:layout_marginBottom="20dp"
+        android:layout_gravity="bottom|center_horizontal"
+        app:barMarker="move_horizontal"
+        app:barOrientation="bottom"
+        android:layout_width="match_parent" android:layout_height="24dp"/>
+
+    <rpi.aut.rpi_monit.components.TickBarView
+        android:id="@+id/barCameraLight"
+        android:layout_marginLeft="20dp"
+        android:layout_gravity="left|center_vertical"
+        app:barMarker="contrast"
+        app:barOrientation="left"
+        android:layout_width="24dp" android:layout_height="match_parent"/>
+
+
+</android.support.design.widget.CoordinatorLayout>

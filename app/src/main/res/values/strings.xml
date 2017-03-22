@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Bebelino Monitor</string>
+    <string name="temperature">Ambient Temperature</string>
+    <string name="humidity">Humidity</string>
+    <string name="sound">Sound</string>
+    <string name="light">Light</string>
+
+    <string name="title_activity_camera">CameraActivity</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
 </resources>

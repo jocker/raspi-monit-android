@@ -1,4 +1,4 @@
-package rpi.aut.homeautomation;
+package rpi.aut.rpi_monit;
 
 import org.junit.Test;
 

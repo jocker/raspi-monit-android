@@ -1,4 +1,4 @@
-package rpi.aut.homeautomation;
+package rpi.aut.rpi_monit;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -19,9 +19,5 @@ public class MainActivity extends AppCompatActivity {
         player.play();
     }
 
-    /**
-     * A native method that is implemented by the 'native-lib' native library,
-     * which is packaged with this application.
-     */
 
 }
