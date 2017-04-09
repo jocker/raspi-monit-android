@@ -5,17 +5,14 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
-import android.util.Log;
 import android.view.View;
 
 import com.google.gson.JsonElement;
-
-import org.json.JSONObject;
+import com.google.gson.JsonObject;
 
 import java.net.URISyntaxException;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -32,15 +29,18 @@ import rpi.aut.rpi_monit.lib.RpiSensor;
 import rpi.aut.rpi_monit.lib.Utils;
 import rpi.aut.rpi_monit.timeseries.TimeSeriesData;
 import rpi.aut.rpi_monit.timeseries.TimeSeriesPoint;
+import timber.log.Timber;
 
 
 public class RpiService extends Service {
 
+    private static final String SESSION_ID = UUID.randomUUID().toString();
+
+    private static final String SUCCESS = "success";
+
     public static Observable<RpiService.ServiceBinder> getRpiService(View view){
         return Utils.getHostActivity(view).getServiceConnection(RpiService.class).cast(RpiService.ServiceBinder.class);
     }
-
-    //private static final String SOCKET_URI = "http://192.168.1.142:3000";
 
     private ServiceBinder mServiceBinder;
 
@@ -126,27 +126,21 @@ public class RpiService extends Service {
                 mIsConnecting = true;
 
                 try{
-                    Socket socket = IO.socket(AppConfig.getRemoteUri().toString());
+                    final Socket socket = IO.socket(AppConfig.getRemoteUri().toString());
                     socket.once(Socket.EVENT_CONNECT, args -> {
-                        Log.e("RpiService","EVENT_CONNECT =>"+ Arrays.toString(args));
+                        Timber.e("RpiService EVENT_CONNECT =>"+ Arrays.toString(args));
                         resolve.call(socket);
                     }).once(Socket.EVENT_CONNECT_ERROR, args -> {
-                        Log.e("RpiService","EVENT_CONNECT_ERROR =>"+ Arrays.toString(args));
+                        Timber.e("RpiService EVENT_CONNECT_ERROR =>"+ Arrays.toString(args));
                         resolve.call(null);
+                        socket.close();
                     }).once(Socket.EVENT_CONNECT_TIMEOUT, args -> {
-                        Log.e("RpiService","EVENT_CONNECT_TIMEOUT =>"+ Arrays.toString(args));
+                        Timber.e("RpiService EVENT_CONNECT_TIMEOUT =>"+ Arrays.toString(args));
                         resolve.call(null);
+                        socket.close();
                     }).once(Socket.EVENT_DISCONNECT, args -> {
-                        Log.e("RpiService","EVENT_DISCONNECT =>"+ Arrays.toString(args));
+                        Timber.e("RpiService","EVENT_DISCONNECT =>"+ Arrays.toString(args));
                         resolve.call(null);
-                    }).on("sensor_data", args -> {
-                        if(args != null && args.length == 1 && args[0] instanceof JSONObject){
-                            TimeSeriesPoint sensorEvent = TimeSeriesPoint.create((JSONObject)args[0]);
-                            if(sensorEvent != null){
-                                mSensorPointPipe.onNext(sensorEvent);
-                            }
-                        }
-
                     });
                     socket.connect();
 
@@ -157,11 +151,6 @@ public class RpiService extends Service {
             }finally {
                 mLock.unlock();
             }
-        }).doOnSubscribe(disposable -> {
-            Log.e("aaaaa","aaaaaa");
-            Log.e("aaaaa","aaaaaa");
-            Log.e("aaaaa","aaaaaa");
-            Log.e("aaaaa","aaaaaa");
         });
     }
 
@@ -172,6 +161,66 @@ public class RpiService extends Service {
         ServiceBinder(RpiService service){
             super();
             mService = service;
+        }
+
+        public Observable<Boolean> setCameraX(int value){
+            return sendCameraCmd("camera:x", value);
+        }
+
+        public Observable<Boolean> setCameraY(int value){
+            return sendCameraCmd("camera:y", value);
+        }
+
+        public Observable<Boolean> setCameraIrBrightness(int value){
+            return sendCameraCmd("camera:ir", value);
+        }
+
+        public Observable<CameraSettings> getCameraSettings(){
+            return sendCmd("camera:settings", null).map(jsonObject -> {
+                if(jsonObject.has(SUCCESS) && jsonObject.get(SUCCESS).getAsBoolean()){
+                    return CameraSettings.fromJson(jsonObject);
+                }
+                return null;
+            });
+        }
+
+        private Observable<Boolean> sendCameraCmd(String cmd, int value){
+            JsonObject obj = new JsonObject();
+            obj.addProperty("cmd", cmd);
+            obj.addProperty("value", value);
+            return sendCmd(cmd, obj).map(jsonObject -> {
+                if(jsonObject.isJsonObject() && jsonObject.has(SUCCESS)){
+                    return jsonObject.get(SUCCESS).getAsBoolean();
+                }
+                return false;
+            });
+        }
+
+        private Observable<JsonObject> sendCmd(String cmd, JsonObject obj){
+            if(obj == null){
+                obj = new JsonObject();
+            }
+            obj.addProperty("cmd", cmd );
+            obj.addProperty("session_id", SESSION_ID);
+            obj.addProperty("created_at", System.currentTimeMillis());
+
+
+            final Object[] args = new Object[]{ obj };
+
+            return mService.onConnected().flatMapMaybe(socket -> {
+                return Maybe.create(e -> {
+                    socket.emit("cmd", args, receivedArgs -> {
+                        if(!e.isDisposed()){
+                            if(receivedArgs != null && receivedArgs.length == 1 && receivedArgs[0] instanceof String){
+                                JsonObject parsedArgs = Utils.fromJson(String.valueOf(receivedArgs[0]), JsonObject.class);
+                                e.onSuccess(parsedArgs);
+                            }
+                            e.onComplete();
+                        }
+                    });
+
+                });
+            });
         }
 
 
@@ -188,20 +237,6 @@ public class RpiService extends Service {
         }
 
 
-        public Observable<Object> broadcast(String eventName, Object... args){
-            return mService.onConnected().flatMapMaybe(socket -> {
-                return Maybe.create(e -> {
-                    socket.emit(eventName, args, receivedArgs -> {
-                        if(!e.isDisposed()){
-                            e.onSuccess(receivedArgs[0]);
-                            e.onComplete();
-                        }
-                    });
-
-                });
-            });
-        }
-
         public Observable<ApiResponse<TimeSeriesData>> loadSensorData(RpiSensor sensor, Long since){
             HttpClient.RequestBuilder requestBuilder = HttpClient.get("series", sensor.rawType);
             if(since != null){
@@ -216,29 +251,6 @@ public class RpiService extends Service {
                 return ApiResponse.success(objectApiResponse.request, objectApiResponse.response, TimeSeriesData.parse(objectApiResponse.body));
             });
 
-        }
-
-        public Observable<Boolean> setCameraX(int value){
-            return invokeCameraCmd("x", obj -> {
-                obj.put("percent", value);
-            });
-        }
-
-        public Observable<Boolean> setCameraY(int value){
-            return invokeCameraCmd("y", obj -> {
-                obj.put("percent", value);
-            });
-        }
-
-        private Observable<Boolean> invokeCameraCmd(String type, Action1<Map<String, Object>> action){
-            Map<String, Object> params = new HashMap<>();
-            action.call(params);
-            params.put("type", type);
-            final long sentAt = System.currentTimeMillis();
-            return broadcast("camera:cmd", Utils.toJson(params)).map(o -> {
-                Log.e("camera:cmd", "RECEIVED "+String.valueOf(o)+" AFTER "+ (System.currentTimeMillis()-sentAt));
-                return true;
-            });
         }
 
         public SensorDataProvider getSensorDataProvider(RpiSensor sensor){
@@ -263,5 +275,36 @@ public class RpiService extends Service {
     public interface SensorDataProvider{
         Observable<ApiResponse<TimeSeriesData>> load();
         Observable<TimeSeriesPoint> onNewEntry();
+    }
+
+
+    public static class CameraSettings{
+
+        public static CameraSettings fromJson(JsonObject json){
+            int x = 0, y = 0, ir = 0;
+            if(json != null && json.has("values")){
+                JsonObject source = json.get("values").getAsJsonObject();
+                if(source.has("x")){
+                    x = source.get("x").getAsInt();
+                }
+                if(source.has("y")){
+                    y = source.get("y").getAsInt();
+                }
+                if(source.has("ir")){
+                    ir = source.get("ir").getAsInt();
+                }
+            }
+
+            return new CameraSettings(x, y, ir);
+
+        }
+
+        public final int x, y, ir;
+
+        private CameraSettings(int x, int y, int ir){
+            this.x = x;
+            this.y = y;
+            this.ir = ir;
+        }
     }
 }

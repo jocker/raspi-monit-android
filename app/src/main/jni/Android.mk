@@ -1,6 +1,5 @@
 LOCAL_PATH := $(call my-dir)
 
-GSTREAMER_ROOT_ANDROID: '/home/cris/WORK/ANDROID/gst-lib-1.10.2'
 
 include $(CLEAR_VARS)
 

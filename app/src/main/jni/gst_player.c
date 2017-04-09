@@ -81,34 +81,6 @@ static JNIEnv *get_jni_env (void) {
   return env;
 }
 
-/* Retrieve the video sink's Caps and tell the application about the media size */
-static void check_media_size (CustomData *data) {
-  JNIEnv *env = get_jni_env ();
-  GstElement *video_sink;
-  GstPad *video_sink_pad;
-  GstCaps *caps;
-  GstVideoInfo info;
-
-  /* Retrieve the Caps at the entrance of the video sink */
-  g_object_get (data->pipeline, "video-sink", &video_sink, NULL);
-  video_sink_pad = gst_element_get_static_pad (video_sink, "sink");
-  caps = gst_pad_get_current_caps (video_sink_pad);
-
-  if (gst_video_info_from_caps(&info, caps)) {
-    info.width = info.width * info.par_n / info.par_d;
-    GST_DEBUG ("Media size is %dx%d, notifying application", info.width, info.height);
-
-    (*env)->CallVoidMethod (env, data->app, on_media_size_changed_method_id, (jint)info.width, (jint)info.height);
-    if ((*env)->ExceptionCheck (env)) {
-      GST_ERROR ("Failed to call Java method");
-      (*env)->ExceptionClear (env);
-    }
-  }
-
-  gst_caps_unref(caps);
-  gst_object_unref (video_sink_pad);
-  gst_object_unref(video_sink);
-}
 
 /* Change the content of the UI's TextView */
 static void set_ui_message (const gchar *message, CustomData *data) {
@@ -131,17 +103,9 @@ static void state_changed_cb (GstBus *bus, GstMessage *msg, CustomData *data) {
   gst_message_parse_state_changed(msg, &old_state, &new_state, &pending_state);
   /* Only pay attention to messages coming from the pipeline, not its children */
   if (GST_MESSAGE_SRC (msg) == GST_OBJECT (data->pipeline)) {
-
     gchar *message = g_strdup_printf("State changed to %s", gst_element_state_get_name(new_state));
     set_ui_message(message, data);
     g_free(message);
-
-    /* The Ready to Paused state change is particularly interesting: */
-    if (old_state == GST_STATE_READY && new_state == GST_STATE_PAUSED) {
-      /* By now the sink already knows the media size */
-      //check_media_size(data);
-
-    }
   }
 }
 
@@ -197,19 +161,32 @@ static void error_cb (GstBus *bus, GstMessage *msg, CustomData *data) {
  * These conditions will change depending on the application */
 static void check_initialization_complete (CustomData *data) {
   JNIEnv *env = get_jni_env ();
-  if (!data->initialized && data->native_window && data->main_loop) {
-    GST_DEBUG ("Initialization complete, notifying application. native_window:%p main_loop:%p", data->native_window, data->main_loop);
+    if(data->video_sink){
+        if (!data->initialized && data->native_window && data->main_loop) {
+            GST_DEBUG ("Initialization complete, notifying application. native_window:%p main_loop:%p", data->native_window, data->main_loop);
 
-    /* The main loop is running and we received a native window, inform the sink about it */
-    gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (data->video_sink), (guintptr)data->native_window);
+            /* The main loop is running and we received a native window, inform the sink about it */
+            gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (data->video_sink), (guintptr)data->native_window);
 
-    (*env)->CallVoidMethod (env, data->app, on_gstreamer_initialized_method_id);
-    if ((*env)->ExceptionCheck (env)) {
-      GST_ERROR ("Failed to call Java method");
-      (*env)->ExceptionClear (env);
+            (*env)->CallVoidMethod (env, data->app, on_gstreamer_initialized_method_id);
+            if ((*env)->ExceptionCheck (env)) {
+                GST_ERROR ("Failed to call Java method");
+                (*env)->ExceptionClear (env);
+            }
+            data->initialized = TRUE;
+        }
+    }else{
+        if (!data->initialized && data->main_loop) {
+            GST_DEBUG ("Initialization complete, notifying application. main_loop:%p", data->main_loop);
+            (*env)->CallVoidMethod (env, data->app, on_gstreamer_initialized_method_id);
+            if ((*env)->ExceptionCheck (env)) {
+                GST_ERROR ("Failed to call Java method");
+                (*env)->ExceptionClear (env);
+            }
+            data->initialized = TRUE;
+        }
     }
-    data->initialized = TRUE;
-  }
+
 }
 
 /* Main method for the native code. This is executed on its own thread. */
@@ -243,11 +220,15 @@ static void *app_function (void *userdata) {
   /* Set the pipeline to READY, so it can already accept a window handle, if we have one */
   gst_element_set_state(data->pipeline, GST_STATE_READY);
 
-  data->video_sink = gst_bin_get_by_interface(GST_BIN(data->pipeline), GST_TYPE_VIDEO_OVERLAY);
-  if (!data->video_sink) {
-    GST_ERROR ("Could not retrieve video sink");
-    return NULL;
+  if(strstr(data->rawPipeline, "video") != NULL) {
+    data->video_sink = gst_bin_get_by_interface(GST_BIN(data->pipeline), GST_TYPE_VIDEO_OVERLAY);
+    if (!data->video_sink) {
+      GST_ERROR ("Could not retrieve video sink");
+      return NULL;
+    }
   }
+
+
 
   /* Instruct the bus to emit signals for each received message, and connect to the interesting signals */
   bus = gst_element_get_bus (data->pipeline);
@@ -255,12 +236,14 @@ static void *app_function (void *userdata) {
   g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func, NULL, NULL);
   g_source_attach (bus_source, data->context);
   g_source_unref (bus_source);
+
   g_signal_connect (G_OBJECT (bus), "message::error", (GCallback)error_cb, data);
   g_signal_connect (G_OBJECT (bus), "message::state-changed", (GCallback)state_changed_cb, data);
   g_signal_connect (G_OBJECT (bus), "message::error", (GCallback)error_cb, data);
   g_signal_connect (G_OBJECT (bus), "message::eos", (GCallback)eos_cb, data);
   g_signal_connect (G_OBJECT (bus), "message::state-changed", (GCallback)state_changed_cb, data);
   g_signal_connect (G_OBJECT (bus), "message::clock-lost", (GCallback)clock_lost_cb, data);
+
   gst_object_unref (bus);
 
   /* Create a GLib Main Loop and set it to run */
@@ -276,7 +259,9 @@ static void *app_function (void *userdata) {
   g_main_context_pop_thread_default(data->context);
   g_main_context_unref (data->context);
   gst_element_set_state (data->pipeline, GST_STATE_NULL);
-  gst_object_unref (data->video_sink);
+  if(data->video_sink){
+    gst_object_unref (data->video_sink);
+  }
   gst_object_unref (data->pipeline);
 
   return NULL;
@@ -412,7 +397,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     __android_log_print (ANDROID_LOG_ERROR, "StreamPlayer", "Could not retrieve JNIEnv");
     return 0;
   }
-  jclass klass = (*env)->FindClass (env, "rpi/aut/homeautomation/StreamPlayer");
+  jclass klass = (*env)->FindClass (env, "rpi/aut/rpi_monit/StreamPlayer");
   (*env)->RegisterNatives (env, klass, native_methods, G_N_ELEMENTS(native_methods));
 
   pthread_key_create (&current_jni_env, detach_current_thread);

@@ -25,7 +25,6 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import rpi.aut.rpi_monit.charts.WaveFormChart;
 import rpi.aut.rpi_monit.components.ScalableProgressBar;
 import rpi.aut.rpi_monit.components.rv.CircularSensorLayoutManager;
-import rpi.aut.rpi_monit.lib.Action1;
 import rpi.aut.rpi_monit.lib.RpiSensor;
 import rpi.aut.rpi_monit.lib.RxView;
 import rpi.aut.rpi_monit.lib.Utils;
@@ -99,11 +98,6 @@ public class WsActivity extends BaseActivity {
         super.onPause();
     }
 
-    private void invokeWs(Action1<RpiService.ServiceBinder> action){
-        getServiceConnection(RpiService.class).observeOn(AndroidSchedulers.mainThread()).subscribe(iBinder -> {
-            action.call((RpiService.ServiceBinder)iBinder);
-        });
-    }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {

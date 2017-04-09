@@ -9,7 +9,14 @@ import org.freedesktop.gstreamer.GStreamer;
 
 import java.lang.ref.WeakReference;
 
+import rpi.aut.rpi_monit.lib.Utils;
+
 public class StreamPlayer implements SurfaceHolder.Callback  {
+
+    private static final String VIDEO_PIPELINE = "tcpclientsrc host=192.168.1.142 port=5000 ! gdpdepay ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false";
+    private static final String AUDIO_PIPELINE = "udpsrc port=5001 caps=\"application/x-rtp\" ! queue ! rtppcmudepay ! mulawdec ! audioconvert ! autoaudiosink sync=false";
+    //private static final String AUDIO_PIPELINE = "audiotestsrc ! audioconvert ! audioresample ! autoaudiosink";
+
 
     private native void nativeInit(String pipelineString);     // Initialize native code, build pipeline, etc
     private native void nativeFinalize(); // Destroy pipeline and shutdown native code
@@ -21,24 +28,46 @@ public class StreamPlayer implements SurfaceHolder.Callback  {
 
     private long native_custom_data;      // Native code will use this to keep private data
 
-    private boolean mIsPlaying;   // Whether the user asked to go to PLAYING
+    private boolean mIsPlaying = true;   // Whether the user asked to go to PLAYING
 
-    public static StreamPlayer create(SurfaceView surfaceView, String rawPipeline){
+    public static StreamPlayer createAudioPlayer(Context context){
+        return create(context, AUDIO_PIPELINE);
+    }
+
+    public static StreamPlayer createVideoPlayer(SurfaceView surface, String rawPipeline){
+        StreamPlayer player = create(surface.getContext(), AUDIO_PIPELINE);
+        if(player != null){
+            player.setSurface(surface);
+        }
+        return player;
+    }
+
+    private static StreamPlayer create(Context context, String rawPipeline){
         try {
-            GStreamer.init(surfaceView.getContext());
-            return new StreamPlayer(surfaceView, rawPipeline);
+            GStreamer.init(context);
+            return new StreamPlayer(context, rawPipeline);
         } catch (Exception e) {
             Log.e("StreamPlayer", e.getMessage(), e);
            return null;
         }
-
     }
 
-    private final WeakReference<Context> mContext;
-    private StreamPlayer(SurfaceView surfaceView, String rawPipeline){
-        mContext = new WeakReference<>(surfaceView.getContext());
-        surfaceView.getHolder().addCallback(this);
+    private StreamPlayer(Context context, String rawPipeline){
         nativeInit(rawPipeline);
+    }
+
+
+    private WeakReference<SurfaceView> mSurfaceRef;
+    public void setSurface(SurfaceView surface){
+        SurfaceView prev = Utils.getReferencedValue(mSurfaceRef);
+        if(prev != null && prev.getHolder() != null){
+            prev.getHolder().removeCallback(this);
+        }
+        mSurfaceRef = new WeakReference<>(surface);
+        if(surface != null && surface.getHolder() != null){
+            surface.getHolder().addCallback(this);
+        }
+
     }
 
     // Called from native code. This sets the content of the TextView from the UI thread.

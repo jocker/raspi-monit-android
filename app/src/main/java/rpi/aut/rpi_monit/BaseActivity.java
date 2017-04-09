@@ -13,7 +13,9 @@ import java.util.Map;
 
 import io.reactivex.Observable;
 import io.reactivex.subjects.AsyncSubject;
+import rpi.aut.rpi_monit.lib.Action1;
 import rpi.aut.rpi_monit.lib.RxActivity;
+import rpi.aut.rpi_monit.services.RpiService;
 
 public class BaseActivity extends RxActivity {
 
@@ -33,6 +35,16 @@ public class BaseActivity extends RxActivity {
         if(conn != null){
             conn.disconnect();
         }
+    }
+
+    protected Observable<RpiService.ServiceBinder> getWsService(){
+        return  getServiceConnection(RpiService.class).cast(RpiService.ServiceBinder.class);
+    }
+
+    protected void invokeWs(Action1<RpiService.ServiceBinder> action){
+        getWsService().subscribe(serviceBinder -> {
+            action.call(serviceBinder);
+        });
     }
 
 

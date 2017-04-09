@@ -1,31 +1,56 @@
 package rpi.aut.rpi_monit;
 
-import android.content.Context;
-import android.graphics.Color;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.design.widget.BottomSheetBehavior;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
-import android.util.Log;
-import android.view.View;
+import android.support.annotation.IdRes;
+import android.util.SparseIntArray;
 import android.view.ViewGroup;
 
-import rpi.aut.rpi_monit.components.CircularProgressView;
+import io.reactivex.android.schedulers.AndroidSchedulers;
 import rpi.aut.rpi_monit.components.TickBarView;
-import rpi.aut.rpi_monit.components.rv.SensorAdapter;
-import rpi.aut.rpi_monit.lib.DrawableUtils;
-import rpi.aut.rpi_monit.lib.RpiSensor;
 import rpi.aut.rpi_monit.lib.RxView;
-import rpi.aut.rpi_monit.lib.Utils;
 
 
-/**
- * An example full-screen activity that shows and hides the system UI (i.e.
- * status bar and navigation/system bar) with user interaction.
- */
-public class CameraActivity extends AppCompatActivity {
+public class CameraActivity extends BaseActivity {
+
+    private final TickBarView.OnProgressChangedListener mProgressListener = new TickBarView.OnProgressChangedListener() {
+
+        final SparseIntArray mPositions = new SparseIntArray();
+
+        @Override
+        public void onStartDrag(TickBarView view) {
+
+        }
+
+        @Override
+        public void onEndDrag(TickBarView view) {
+
+        }
+
+        @Override
+        public void onProgressChanged(TickBarView view, float progress, boolean fromUser) {
+            if(fromUser){
+                final int id = view.getId();
+                final int absProgress = (int)Math.ceil(progress*1000);
+                if(mPositions.get(id, -1) == absProgress){
+                    return;
+                }
+                mPositions.put(id, absProgress);
+                invokeWs(service -> {
+                    switch (id) {
+                        case R.id.barCameraY:
+                            service.setCameraY(1000 - absProgress).subscribe();
+                            break;
+                        case R.id.barCameraX:
+                            service.setCameraX(absProgress).subscribe();
+                            break;
+                        case R.id.barCameraIrLight:
+                            service.setCameraIrBrightness(1000 -absProgress).subscribe();
+                            break;
+                    }
+                });
+            }
+        }
+    };
 
 
     @Override
@@ -35,102 +60,52 @@ public class CameraActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera);
 
 
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
+        StreamPlayer player = StreamPlayer.createAudioPlayer(this);
+        if(player != null){
+            player.play();
+        }
 
-        View bottomSheet = findViewById(R.id.bottom_sheet);
-        BottomSheetBehavior behavior = BottomSheetBehavior.from(bottomSheet);
-        behavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
-            @Override
-            public void onStateChanged(@NonNull View bottomSheet, int newState) {
-                // React to state change
-                Log.e("aaaaa","aaaaa");
-                Log.e("aaaaa","aaaaa");
-                Log.e("aaaaa","aaaaa");
-                Log.e("aaaaa","aaaaa");
-            }
-
-            @Override
-            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-                // React to dragging events
-                Log.e("aaaaa","aaaaa "+slideOffset);
-            }
+        getWsService().flatMap(serviceBinder -> {
+            return serviceBinder.getCameraSettings();
+        }).takeUntil(onLifecycleDestroy()).observeOn(AndroidSchedulers.mainThread()).subscribe(cameraSettings -> {
+            ((TickBarView)findViewById(R.id.barCameraX)).setProgress((100-cameraSettings.x)/100f);
+            ((TickBarView)findViewById(R.id.barCameraY)).setProgress(cameraSettings.y/100f);
+            ((TickBarView)findViewById(R.id.barCameraIrLight)).setProgress(cameraSettings.ir/100f);
         });
-
-
-        RecyclerView sensorNav = (RecyclerView)findViewById(R.id.sensorButtons);
-        sensorNav.setAdapter(new SensorButtonAdapter());
-        sensorNav.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-
-
-
 
         RxView.onMeasured(getWindow().getDecorView()).subscribe(view -> {
             TickBarView cameraY = (TickBarView)findViewById(R.id.barCameraY);
-            cameraY.setProgress(0.2f, false);
+            cameraY.setProgressListener(mProgressListener);
             ViewGroup.LayoutParams lp = cameraY.getLayoutParams();
             lp.height = getWindow().getDecorView().getHeight()/2;
             cameraY.setLayoutParams(lp);
 
             TickBarView cameraX = (TickBarView)findViewById(R.id.barCameraX);
-            cameraX.setProgress(0.2f, false);
+            cameraX.setProgressListener(mProgressListener);
             lp = cameraX.getLayoutParams();
             lp.width = getWindow().getDecorView().getWidth()/3*2;
             cameraX.setLayoutParams(lp);
 
-            TickBarView cameraLight = (TickBarView)findViewById(R.id.barCameraLight);
-            cameraLight.setProgress(0.2f, false);
+            TickBarView cameraLight = (TickBarView)findViewById(R.id.barCameraIrLight);
+            cameraLight.setProgressListener(mProgressListener);
             lp = cameraLight.getLayoutParams();
             lp.height = getWindow().getDecorView().getHeight()/2;
             cameraLight.setLayoutParams(lp);
         });
 
+
+
     }
+
+    private TickBarView getTickBar(@IdRes int id){
+        return (TickBarView)findViewById(id);
+    }
+
+
 
     @Override
     protected void onResume() {
         super.onResume();
     }
 
-    private static class SensorButtonAdapter extends SensorAdapter{
-
-        public SensorButtonAdapter() {
-            super(new RpiSensor[]{
-                    RpiSensor.Light,
-                    RpiSensor.Sound,
-                    null,
-                    RpiSensor.Temperature,
-                    RpiSensor.Humidity
-            });
-        }
-
-        @Override
-        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            return new ViewHolder(inflateView(parent, R.layout.rv_sensor_button), this);
-        }
-
-        @Override
-        public void onBindViewHolder(ViewHolder holder, int position) {
-            RpiSensor sensor = getItem(position);
-            CircularProgressView view = (CircularProgressView)holder.itemView;
-            Context context = view.getContext();
-
-
-            if(sensor == null){
-                view.setFillColor(Color.WHITE);
-                view.setIcon(DrawableUtils.getTintedDrawable(context, R.drawable.ic_settings, Utils.getThemeColor(context, android.R.attr.colorPrimaryDark)));
-            }else{
-                view.setIcon(sensor.getIcon(context));
-                view.setProgress(getSensorDisplayPercent(sensor)/100);
-                view.setProgress(0.4f);
-                view.setTrackWidth(Utils.dpToPx(2));
-                view.setProgressWidth(Utils.dpToPx(3));
-                view.setTrackColor(Utils.getThemeColor(context, android.R.attr.colorPrimary));
-                view.setProgressColor(sensor.getColor(context));
-                view.setAlpha(0.7f);
-            }
-        }
-
-    }
 }

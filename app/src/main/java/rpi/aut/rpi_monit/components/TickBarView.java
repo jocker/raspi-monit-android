@@ -56,7 +56,7 @@ public class TickBarView extends View {
     private boolean mMarginsSet = false;
 
     private Pair<Integer, Integer> mStartDragPoint;
-    private final float mSpeedFactor = 0.5f;
+    private final float mSpeedFactor = 0.8f;
     private float mProgress = 0f, mDragProgress = 0;
     private int mState = STATE_INACTIVE;
     private ValueAnimator mStateAnimator;
@@ -379,6 +379,14 @@ public class TickBarView extends View {
         return mStartDragPoint != null;
     }
 
+    public void setProgressListener(OnProgressChangedListener listener){
+        mListener = listener;
+    }
+
+    public void setProgress(float progress){
+        setProgress(progress, false);
+    }
+
     public void setProgress(float progress, boolean fromUser){
         if(mProgress != progress){
             mProgress = progress;
@@ -417,7 +425,6 @@ public class TickBarView extends View {
             percent += mDragProgress;
             percent = Math.max(0, Math.min(1, percent));
             setProgress(percent, true);
-            Log.e("progress", String.format("distance:%s total:%s percent:%s", distance, totalDistance, percent));
         }
 
     }
@@ -590,13 +597,9 @@ public class TickBarView extends View {
 
         @Override
         public void draw(@NonNull Canvas canvas) {
-            //canvas.drawRect(getBounds(), ColorUtils.getFillPaint(ColorUtils.addAlpha(Color.RED, 0.1f)));
-
-
             drawTrack(canvas);
             drawMarker(canvas);
             drawIndicator(canvas);
-
         }
 
         private void drawTrack(Canvas canvas){
