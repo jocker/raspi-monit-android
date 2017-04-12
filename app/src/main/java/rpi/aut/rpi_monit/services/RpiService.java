@@ -204,7 +204,6 @@ public class RpiService extends Service {
             obj.addProperty("session_id", SESSION_ID);
             obj.addProperty("created_at", System.currentTimeMillis());
 
-
             final Object[] args = new Object[]{ obj };
 
             return mService.onConnected().flatMapMaybe(socket -> {
@@ -222,6 +221,47 @@ public class RpiService extends Service {
                 });
             });
         }
+
+        /*private static void x(){
+
+            Observable.timer(1, TimeUnit.MILLISECONDS).map(aLong -> {
+                try{
+                    Uri uri = AppConfig.getRemoteUri();
+                    uri.getHost();
+                    InetAddress in = InetAddress.getByName(uri.getHost());
+                    final long now = System.currentTimeMillis();
+                    try {
+                        if (in.isReachable(100)) {
+                            final long ellapsed = System.currentTimeMillis()-now;
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                        } else {
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                            Log.e("aaaa","aaaaaa");
+                        }
+                    } catch (IOException e) {
+                        // TODO Auto-generated catch block
+                        Log.e("aaaa","aaaaaa");
+                    }
+                    Log.e("aaaa","aaaa");
+                    Log.e("aaaa","aaaa");
+                    Log.e("aaaa","aaaa");
+                    Log.e("aaaa","aaaa");
+                }catch (UnknownHostException e){
+
+                }
+
+                return 1;
+
+            }).subscribe();
+
+
+
+        }*/
 
 
         public Observable<TimeSeriesPoint> onSensorPoint(RpiSensor sensor){

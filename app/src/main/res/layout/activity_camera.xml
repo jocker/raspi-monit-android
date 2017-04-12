@@ -10,6 +10,12 @@
 
     </android.support.v7.widget.Toolbar>
 
+    <rpi.aut.rpi_monit.GStreamerSurfaceView
+        android:id="@+id/videoSurface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_vertical|center_horizontal" />
+
 
     <FrameLayout
         android:id="@+id/cntCameraPosition"

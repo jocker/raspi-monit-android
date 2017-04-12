@@ -13,7 +13,7 @@ import rpi.aut.rpi_monit.lib.Utils;
 
 public class StreamPlayer implements SurfaceHolder.Callback  {
 
-    private static final String VIDEO_PIPELINE = "tcpclientsrc host=192.168.1.142 port=5000 ! gdpdepay ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false";
+    private static final String VIDEO_PIPELINE = "tcpclientsrc host=192.168.1.124 port=5000 ! gdpdepay ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink sync=false";
     private static final String AUDIO_PIPELINE = "udpsrc port=5001 caps=\"application/x-rtp\" ! queue ! rtppcmudepay ! mulawdec ! audioconvert ! autoaudiosink sync=false";
     //private static final String AUDIO_PIPELINE = "audiotestsrc ! audioconvert ! audioresample ! autoaudiosink";
 
@@ -34,8 +34,8 @@ public class StreamPlayer implements SurfaceHolder.Callback  {
         return create(context, AUDIO_PIPELINE);
     }
 
-    public static StreamPlayer createVideoPlayer(SurfaceView surface, String rawPipeline){
-        StreamPlayer player = create(surface.getContext(), AUDIO_PIPELINE);
+    public static StreamPlayer createVideoPlayer(SurfaceView surface){
+        StreamPlayer player = create(surface.getContext(), VIDEO_PIPELINE);
         if(player != null){
             player.setSurface(surface);
         }
